@@ -26,7 +26,7 @@
 
 | 检查 | 结果 |
 | --- | --- |
-| 完整 pytest 回归 | **185 passed，0 skipped** |
+| 完整 pytest 回归 | **189 passed，0 skipped** |
 | Ruff 代码检查 | 通过 |
 | Ruff 格式检查 | 27 个 Python 文件均通过 |
 | `pip check` | No broken requirements found |

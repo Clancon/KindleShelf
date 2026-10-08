@@ -12,6 +12,7 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -31,6 +32,13 @@ def docker(*arguments: str, input_text: str | None = None) -> str:
         timeout=900,
     )
     return result.stdout.strip()
+
+
+def published_url(name: str) -> str:
+    addresses = docker("port", name, "8090/tcp").splitlines()
+    if not addresses:
+        raise AssertionError(f"Container has no published HTTP port: {name}")
+    return f"http://{addresses[0]}"
 
 
 class TokenParser(HTMLParser):
@@ -71,18 +79,24 @@ class Client:
 
 def wait_ready(name: str, base_url: str) -> Client:
     deadline = time.monotonic() + 180
+    last_error: urllib.error.URLError | None = None
     while time.monotonic() < deadline:
         state = json.loads(docker("inspect", "--format", "{{json .State}}", name))
         if not state.get("Running"):
             raise AssertionError(f"Container exited: {docker('logs', name)}")
         if state.get("Health", {}).get("Status") == "healthy":
             client = Client(base_url)
-            result = client.json("/health")
-            if not all(result.get(key) is True for key in ("ok", "database", "calibre")):
-                raise AssertionError(f"Incomplete readiness: {result}")
-            return client
+            try:
+                result = client.json("/health")
+            except urllib.error.URLError as exc:
+                last_error = exc
+            else:
+                if not all(result.get(key) is True for key in ("ok", "database", "calibre")):
+                    raise AssertionError(f"Incomplete readiness: {result}")
+                return client
         time.sleep(1)
-    raise AssertionError(f"Container did not become ready: {docker('logs', name)}")
+    detail = f"; last HTTP error: {last_error}" if last_error else ""
+    raise AssertionError(f"Container did not become ready{detail}: {docker('logs', name)}")
 
 
 def prepare_context(destination: Path) -> None:
@@ -173,7 +187,7 @@ def exercise(name: str, client: Client) -> None:
     if state["Running"] or state["ExitCode"] == 137:
         raise AssertionError(f"Container did not stop without SIGKILL: {state}")
     docker("start", name)
-    client = wait_ready(name, client.base_url)
+    client = wait_ready(name, published_url(name))
     retained = client.json("/api/books")["books"]
     if len(retained) != 1 or retained[0]["status"] != "finished":
         raise AssertionError("Reading state did not survive restart.")
@@ -247,8 +261,7 @@ def main() -> int:
                     or limits["PidsLimit"] != 256
                 ):
                     raise AssertionError("Container resource limits were not applied.")
-                address = docker("port", name, "8090/tcp").splitlines()[0]
-                exercise(name, wait_ready(name, f"http://{address}"))
+                exercise(name, wait_ready(name, published_url(name)))
             finally:
                 subprocess.run(["docker", "rm", "--force", name], capture_output=True, check=False)
                 if os.name != "nt":

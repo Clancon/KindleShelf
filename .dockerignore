@@ -1,0 +1,18 @@
+# Only runtime source can enter the Docker build context.
+**
+!Dockerfile
+!requirements.txt
+!app.py
+!kindle_shelf/
+!kindle_shelf/**
+!scripts/
+!scripts/healthcheck.py
+**/__pycache__/
+**/*.py[cod]
+**/.env*
+**/*.db
+**/*.db-*
+**/*.sqlite*
+**/*.pem
+**/*.key
+**/*.log

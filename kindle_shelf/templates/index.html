@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Kindle 本地传书台{% endblock %}
+{% block content %}
+<section class="hero">
+  <div>
+    <p class="eyebrow">LOCAL · PRIVATE · E-INK FRIENDLY</p>
+    <h1>把想读的内容，放进 Kindle。</h1>
+    <p>上传一本书，或粘贴文章链接。程序在电脑上完成清理和转换，Kindle 只需打开书架点一下下载。</p>
+  </div>
+  <div class="address-card">
+    <span>Kindle 内置浏览器访问</span>
+    {% for address in kindle_addresses %}<code>{{ address }}</code>{% else %}<code>未检测到局域网地址</code>{% endfor %}
+    <small>电脑和 Kindle 必须连接同一个 Wi-Fi</small>
+  </div>
+</section>
+
+<section class="stats-strip">
+  <a href="{{ url_for('index', status='unread') }}"><strong>{{ stats.unread }}</strong><span>未读</span></a>
+  <a href="{{ url_for('index', status='reading') }}"><strong>{{ stats.reading }}</strong><span>在读</span></a>
+  <a href="{{ url_for('index', status='finished') }}"><strong>{{ stats.finished }}</strong><span>已完成</span></a>
+  <a href="{{ url_for('stats_page') }}"><strong>{{ stats.completion_rate }}%</strong><span>完成率</span></a>
+</section>
+
+{% if not calibre_available %}
+<div class="notice error">未检测到 Calibre。已有 MOBI/PDF 可以直接加入，但 EPUB 和文章暂时无法转换。请安装 Calibre 后重启。</div>
+{% endif %}
+
+<section class="three-column">
+  <form class="panel" method="post" action="{{ url_for('add_upload') }}" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <span class="step">01</span><h2>上传书籍</h2>
+    <label>选择文件<input type="file" name="book" required accept=".epub,.pdf,.mobi,.azw,.azw3,.txt,.html,.htm,.docx,.rtf,.cbz"></label>
+    <label>书名（可不填）<input name="title" placeholder="自动使用文件名"></label>
+    <label>作者（可不填）<input name="author"></label>
+    <label>输出格式
+      <select name="target"><option value="auto">自动（推荐）</option><option value="mobi">MOBI</option><option value="azw3">AZW3</option></select>
+    </label>
+    <p class="hint">自动模式会保留 PDF/MOBI/AZW3/TXT，其余格式转成 MOBI。</p>
+    <button type="submit">加入书架</button>
+  </form>
+
+  <form class="panel accent" method="post" action="{{ url_for('add_url') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <span class="step">02</span><h2>抓取网页文章</h2>
+    <label>网页或公众号文章链接<input type="url" name="url" required placeholder="https://..."></label>
+    <label>书名（可不填）<input name="title" placeholder="自动识别网页标题"></label>
+    <input type="hidden" name="target" value="mobi">
+    <p class="hint">自动提取正文并下载文章图片。微信要求验证时，请使用右侧的粘贴正文。</p>
+    <button type="submit">抓取并生成 MOBI</button>
+  </form>
+
+  <form class="panel" method="post" action="{{ url_for('add_text') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <span class="step">03</span><h2>粘贴正文</h2>
+    <label>标题<input name="title" required></label>
+    <label>作者（可不填）<input name="author"></label>
+    <label>正文<textarea name="text" required rows="7" placeholder="把无法直接抓取的公众号正文粘贴到这里"></textarea></label>
+    <input type="hidden" name="target" value="mobi">
+    <button type="submit">生成 MOBI</button>
+  </form>
+</section>
+
+<section class="library-section">
+  <div class="section-heading"><div><p class="eyebrow">READY TO READ</p><h2>当前书架</h2></div><div class="heading-actions"><a class="secondary-button" href="{{ url_for('stats_page') }}">查看统计</a><a class="secondary-button" href="{{ url_for('kindle') }}">预览 Kindle 页面</a></div></div>
+  <form class="library-filter" method="get" action="{{ url_for('index') }}">
+    <input name="q" value="{{ query }}" placeholder="搜索书名、作者或来源">
+    <select name="status">
+      <option value="">全部状态</option>
+      {% for value, label in reading_statuses.items() %}<option value="{{ value }}"{% if selected_status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button type="submit">筛选</button>
+  </form>
+  {% if books %}
+  <div class="book-list">
+    {% for book in books %}
+    <article class="book-row" id="book-{{ book.id }}">
+      <div class="format">{{ book.format }}</div>
+      <div class="book-info">
+        <div class="book-title-line"><h3>{{ book.title }}</h3><span class="status-badge {{ book.status }}">{{ book.status|status_label }}</span></div>
+        <p>{{ book.author or '未知作者' }} · {{ book.size|filesize }} · 加入于 {{ book.added_at|localtime('%Y-%m-%d') }} · 下载 {{ book.download_count }} 次</p>
+        <div class="progress-track"><span style="width:{{ book.progress }}%"></span></div><small>阅读进度 {{ book.progress }}%</small>
+        {% if book.source_url|source_link %}<a href="{{ book.source_url|source_link }}" target="_blank" rel="noreferrer">查看原文</a>{% endif %}
+        <form class="reading-form" method="post" action="{{ url_for('update_reading', book_id=book.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <select name="status">{% for value, label in reading_statuses.items() %}<option value="{{ value }}"{% if book.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+          <label>进度 <input type="number" name="progress" min="0" max="100" value="{{ book.progress }}">%</label>
+          <input name="note" placeholder="备注（可不填）">
+          <input type="hidden" name="return_to" value="index">
+          <button type="submit">保存记录</button>
+        </form>
+      </div>
+      <div class="actions"><a class="download" href="{{ url_for('download', book_id=book.id, filename=book.filename) }}">下载</a><form method="post" action="{{ url_for('remove', book_id=book.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="text-button" type="submit">移除</button></form></div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}<div class="empty">还没有内容。先上传一本书或抓取一篇文章。</div>{% endif %}
+</section>
+{% endblock %}

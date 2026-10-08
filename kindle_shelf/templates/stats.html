@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}阅读统计 · Kindle Shelf{% endblock %}
+{% block content %}
+<section class="stats-hero">
+  <div><p class="eyebrow">READING ARCHIVE</p><h1>阅读统计与回溯</h1><p>数据来自你手动记录的状态、进度，以及书籍下载行为。原厂 Kindle 不会向本服务回传本地书籍的实际页码。</p></div>
+  <div class="completion-ring"><strong>{{ stats.completion_rate }}%</strong><span>当前完成率</span></div>
+</section>
+
+<section class="metric-grid">
+  <article><span>书架总量</span><strong>{{ stats.total }}</strong><small>近 30 天加入 {{ stats.added_30 }}</small></article>
+  <article><span>未读</span><strong>{{ stats.unread }}</strong><small>等待开始</small></article>
+  <article><span>正在阅读</span><strong>{{ stats.reading }}</strong><small>平均总进度 {{ stats.average_progress }}%</small></article>
+  <article><span>已经完成</span><strong>{{ stats.finished }}</strong><small>近 30 天完成 {{ stats.finished_30 }}</small></article>
+  <article><span>暂不继续</span><strong>{{ stats.abandoned }}</strong><small>不计入完成率分母</small></article>
+  <article><span>累计下载</span><strong>{{ stats.downloads }}</strong><small>设备请求文件次数</small></article>
+</section>
+
+<section class="stats-columns">
+  <article class="stats-panel">
+    <h2>月度完成次数（UTC）</h2>
+    {% if stats.monthly_completed %}
+      {% set maximum = stats.monthly_completed|map(attribute='count')|max %}
+      <div class="bar-chart">
+      {% for item in stats.monthly_completed %}<div class="bar-row"><span>{{ item.month }}</span><div><i style="width:{{ (item.count * 100 / maximum)|round }}%"></i></div><strong>{{ item.count }}</strong></div>{% endfor %}
+      </div>
+    {% else %}<p class="muted">完成第一本书后，这里会出现月度趋势。</p>{% endif %}
+  </article>
+  <article class="stats-panel">
+    <h2>最近完成</h2>
+    {% for book in stats.recent_completed %}<div class="completed-item"><strong>{{ book.title }}</strong><span>{{ book.completed_at|localtime('%Y-%m-%d') }} · {{ book.author or '未知作者' }}</span></div>{% else %}<p class="muted">还没有标记为完成的内容。</p>{% endfor %}
+  </article>
+</section>
+
+<section class="history-section">
+  <div class="section-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>活动记录</h2></div><div class="heading-actions"><a class="secondary-button" href="{{ url_for('export_history') }}">导出全部记录</a><a class="secondary-button" href="{{ url_for('database_backup') }}">备份数据库</a></div></div>
+  <div class="history-list">
+  {% for event in history %}
+    <article>
+      <time>{{ event.occurred_at|localtime }}<br>{{ display_timezone }}</time>
+      <div><strong>{{ event.title }}</strong><span>{{ event.event_type|event_label }}{% if event.event_type == 'status_changed' %}：{{ event.old_status|status_label }} → {{ event.new_status|status_label }}{% elif event.event_type == 'progress_changed' %}：{{ event.old_progress }}% → {{ event.new_progress }}%{% endif %}</span>{% if event.note %}<small>{{ event.note }}</small>{% endif %}</div>
+    </article>
+  {% else %}<div class="empty">还没有活动记录。</div>{% endfor %}
+  </div>
+  {% if next_cursor %}<p><a class="secondary-button" href="{{ url_for('stats_page', before_id=next_cursor) }}">更早记录</a></p>{% endif %}
+  {% if request.args.get('before_id') %}<p><a href="{{ url_for('stats_page') }}">返回最新记录</a></p>{% endif %}
+</section>
+{% endblock %}

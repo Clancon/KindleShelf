@@ -1,0 +1,36 @@
+services:
+  kindle-shelf:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kindle-shelf:0.2.0
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${KINDLE_SHELF_MEMORY_LIMIT:-2g}
+    cpus: ${KINDLE_SHELF_CPU_LIMIT:-2.0}
+    pids_limit: ${KINDLE_SHELF_PIDS_LIMIT:-256}
+    ports:
+      - "${KINDLE_SHELF_BIND_IP:-0.0.0.0}:${KINDLE_SHELF_HOST_PORT:-8090}:8090"
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      KINDLE_SHELF_DATA: /app/data
+      KINDLE_SHELF_PORT: "8090"
+      KINDLE_SHELF_TIMEZONE: ${KINDLE_SHELF_TIMEZONE:-Asia/Shanghai}
+      KINDLE_SHELF_PUBLIC_URL: ${KINDLE_SHELF_PUBLIC_URL:-}
+      KINDLE_SHELF_SECRET: ${KINDLE_SHELF_SECRET:-}
+      KINDLE_SHELF_TRUSTED_HOSTS: ${KINDLE_SHELF_TRUSTED_HOSTS:-}
+    volumes:
+      - type: bind
+        source: ./data
+        target: /app/data
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - scripts/healthcheck.py
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

@@ -1,0 +1,41 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="zh-CN">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="viewport" content="width=device-width" />
+  <title>Kindle 书架</title>
+  <style type="text/css">
+    body { font-family: sans-serif; color: #111; background: #fff; margin: 18px; line-height: 1.45; }
+    h1 { font-size: 26px; margin: 0 0 5px; } .sub { color: #555; margin-top: 0; }
+    form.search { border: 1px solid #777; padding: 10px; margin: 18px 0; }
+    input { font-size: 16px; width: 52%; padding: 7px; } select, button { font-size: 16px; padding: 7px 9px; }
+    .book { border-top: 1px solid #888; padding: 15px 0; } .book h2 { font-size: 20px; margin: 0 0 5px; }
+    .meta { color: #555; margin: 4px 0 12px; } a.get { display: inline-block; border: 2px solid #111; padding: 8px 14px; color: #111; font-weight: bold; text-decoration: none; }
+    .top { float: right; } .empty { border: 1px solid #777; padding: 20px; } .notice { border: 2px solid #111; padding: 8px; margin: 10px 0; }
+    .reading { display: inline; } .reading button { margin: 9px 4px 0 0; background: #fff; border: 1px solid #111; }
+    .summary { border: 1px solid #777; padding: 8px; }
+  </style>
+</head>
+<body id="top">
+  <a class="top" href="#bottom">到底部</a>
+  <h1>Kindle 书架</h1>
+  <p class="sub">下载书籍，也可以在这里记录开始阅读和完成。</p>
+  <p class="summary">未读 {{ stats.unread }} · 在读 {{ stats.reading }} · 已完成 {{ stats.finished }} · 完成率 {{ stats.completion_rate }}%</p>
+  {% with messages = get_flashed_messages(with_categories=true) %}{% for category, message in messages %}<p class="notice">{{ message }}</p>{% endfor %}{% endwith %}
+  <form class="search" method="get" action="{{ url_for('kindle') }}">
+    <label for="q">搜索：</label><input id="q" name="q" value="{{ query }}" />
+    <select name="status"><option value="">全部</option>{% for value, label in reading_statuses.items() %}<option value="{{ value }}"{% if selected_status == value %} selected="selected"{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button type="submit">查找</button>
+  </form>
+  {% for book in books %}
+  <div class="book" id="book-{{ book.id }}">
+    <h2>{{ book.title }}</h2>
+    <p class="meta">{{ book.author or '未知作者' }}<br />{{ book.status|status_label }} · 进度 {{ book.progress }}% · {{ book.format }} · {{ book.size|filesize }}</p>
+    <a class="get" href="{{ url_for('download', book_id=book.id, filename=book.filename) }}">下载到 Kindle</a>
+    {% if book.status == 'unread' %}<form class="reading" method="post" action="{{ url_for('update_reading', book_id=book.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="status" value="reading" /><input type="hidden" name="return_to" value="kindle" /><button type="submit">开始阅读</button></form>{% endif %}
+    {% if book.status != 'finished' %}<form class="reading" method="post" action="{{ url_for('update_reading', book_id=book.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="status" value="finished" /><input type="hidden" name="return_to" value="kindle" /><button type="submit">标为完成</button></form>{% else %}<form class="reading" method="post" action="{{ url_for('update_reading', book_id=book.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}" /><input type="hidden" name="status" value="reading" /><input type="hidden" name="return_to" value="kindle" /><button type="submit">重新阅读</button></form>{% endif %}
+  </div>
+  {% else %}<p class="empty">没有找到可下载的内容。</p>{% endfor %}
+  <p id="bottom"><a href="#top">回到顶部</a> · 共 {{ books|length }} 项</p>
+</body>
+</html>
